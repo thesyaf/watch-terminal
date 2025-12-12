@@ -4,6 +4,8 @@ const keyboard = document.getElementById('keyboard');
 const inputLine = document.getElementById('input-line');
 const commandInput = document.getElementById('command');
 const cursor = document.querySelector('.cursor');
+const matrixCanvas = document.getElementById('matrix-canvas');
+const matrixCtx = matrixCanvas.getContext('2d');
 
 const introLines = [
     { text: 'CONNECTING TO CASIO F-91W...', delay: 1000 },
@@ -18,19 +20,114 @@ const introLines = [
 ];
 
 const typeSpeed = 20;
+let isTyping = false;
+
+function startMatrix() {
+    isTyping = true;
+    keyboard.disabled = true;
+    terminal.style.display = 'none';
+    matrixCanvas.style.display = 'block';
+    setTimeout(() => {
+        matrixCanvas.style.opacity = 1;
+    }, 10);
+
+
+    matrixCanvas.width = window.innerWidth;
+    matrixCanvas.height = window.innerHeight;
+
+    const katakana = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン';
+    const latin = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const nums = '0123456789';
+    const alphabet = katakana + latin + nums;
+
+    const fontSize = 16;
+    const columns = matrixCanvas.width / fontSize;
+
+    const rainDrops = [];
+    for (let x = 0; x < columns; x++) {
+        rainDrops[x] = {
+            y: Math.random() * matrixCanvas.height,
+            speed: 2 + Math.random() * 3, // Random speed between 2 and 5
+        };
+    }
+
+    let animationFrameId;
+    const draw = () => {
+        matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+
+        matrixCtx.fillStyle = '#0F0';
+        matrixCtx.font = fontSize + 'px monospace';
+
+        for (let i = 0; i < rainDrops.length; i++) {
+            const drop = rainDrops[i];
+            const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            
+            matrixCtx.fillText(text, i * fontSize, drop.y * fontSize);
+
+            if (drop.y * fontSize > matrixCanvas.height && Math.random() > 0.975) {
+                drop.y = 0;
+            }
+            drop.y += drop.speed / 10;
+        }
+        animationFrameId = requestAnimationFrame(draw);
+    };
+
+    animationFrameId = requestAnimationFrame(draw);
+
+    setTimeout(() => {
+        cancelAnimationFrame(animationFrameId);
+        matrixCanvas.style.opacity = 0;
+        setTimeout(() => {
+            matrixCanvas.style.display = 'none';
+            terminal.style.display = 'block';
+            output.innerHTML = '';
+            typeResponse('Wake up, Neo...');
+        }, 500); // Wait for fade out
+    }, 10000); // Run for 10 seconds
+}
+
+function typeResponse(text) {
+    isTyping = true;
+    keyboard.disabled = true;
+    inputLine.style.display = 'none';
+
+    const responseElement = document.createElement('div');
+    output.appendChild(responseElement);
+
+    let charIndex = 0;
+    const typeChar = () => {
+        if (charIndex < text.length) {
+            responseElement.textContent += text.charAt(charIndex);
+            charIndex++;
+            terminal.scrollTop = terminal.scrollHeight;
+            setTimeout(typeChar, typeSpeed);
+        } else {
+            isTyping = false;
+            keyboard.disabled = false;
+            inputLine.style.display = 'flex';
+            keyboard.focus();
+        }
+    };
+    typeChar();
+}
 
 function handleCommand(command) {
     appendHistory(`$ ${command}`);
     let response = '';
-    switch (command.toLowerCase().trim()) {
+    const cmd = command.toLowerCase().trim();
+    switch (cmd) {
         case 'help':
-            response = 'Available commands: help, clear, date';
+            response = 'Available commands: help, clear, date, matrix';
             break;
         case 'clear':
             output.innerHTML = '';
             break;
         case 'date':
             response = new Date().toLocaleString();
+            break;
+        case 'matrix':
+            startMatrix();
             break;
         case '':
             break;
@@ -39,7 +136,7 @@ function handleCommand(command) {
             break;
     }
     if (response) {
-        appendHistory(response);
+        typeResponse(response);
     }
     commandInput.textContent = ''; // Clear the command text
 }
@@ -50,6 +147,8 @@ function appendHistory(text) {
 }
 
 function typeIntro() {
+    isTyping = true;
+    keyboard.disabled = true;
     let lineIndex = 0;
     inputLine.style.display = 'none'; // Ensure input line is hidden
 
@@ -83,11 +182,15 @@ function typeIntro() {
 }
 
 function initInteractiveTerminal() {
+    isTyping = false;
+    keyboard.disabled = false;
     inputLine.style.display = 'flex'; // Show the input line
     keyboard.focus();
 
     terminal.addEventListener('click', () => {
-        keyboard.focus();
+        if (!isTyping) {
+            keyboard.focus();
+        }
     });
 
     keyboard.addEventListener('input', (e) => {
@@ -97,9 +200,11 @@ function initInteractiveTerminal() {
     keyboard.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            handleCommand(keyboard.value);
-            keyboard.value = '';
-            commandInput.textContent = '';
+            if (!isTyping) {
+                handleCommand(keyboard.value);
+                keyboard.value = '';
+                commandInput.textContent = '';
+            }
         } else if (e.key === 'c' && e.ctrlKey) {
             // Optional: Handle Ctrl+C to clear line
             keyboard.value = '';
